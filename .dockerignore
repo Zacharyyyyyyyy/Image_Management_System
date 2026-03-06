@@ -1,0 +1,8 @@
+vit-model/
+app/static/uploads/
+app/static/thumbnails/
+app.db
+__pycache__/
+*.pyc
+venv/
+.git/

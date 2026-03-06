@@ -1,0 +1,15 @@
+# 忽略虚拟环境 (非常重要，不要提交 venv!)
+venv/
+ENV/
+vit-model/
+
+# 忽略 Python 编译缓存
+__pycache__/
+*.pyc
+
+# 忽略 VS Code 配置
+.vscode/
+
+# 忽略上传的图片和缩略图 (保持代码库干净)
+app/static/uploads/*
+app/static/thumbnails/*

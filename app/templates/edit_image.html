@@ -1,0 +1,356 @@
+{% extends "base.html" %}
+
+{% block content %}
+<script src="https://cdn.bootcdn.net/ajax/libs/interact.js/1.10.17/interact.min.js"></script>
+<link href="https://cdn.bootcdn.net/ajax/libs/cropperjs/1.5.13/cropper.min.css" rel="stylesheet">
+<script src="https://cdn.bootcdn.net/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
+<link href="https://cdn.bootcdn.net/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet"> 
+
+<style>
+    /* 编辑区容器 */
+    .canvas-container {
+        background-color: #212529;
+        height: 600px; 
+        
+        display: flex;
+        overflow: auto; /* 允许滚动 */
+        border-radius: 8px;
+        position: relative;
+        user-select: none;
+        margin-bottom: 0;
+        padding: 150px;  /* 增加内边距 */
+        box-sizing: content-box;  /* 确保鼠标在空白区域也能触发滚动（某些浏览器需要） */
+    }
+
+    /* 手机端适配 */
+    @media (max-width: 991.98px) {
+        .canvas-container {
+            height: auto;
+            aspect-ratio: 1 / 1;
+            min-height: 400px;
+            max-height: 70vh;
+            margin-bottom: 15px;
+            padding: 50px; 
+        }
+    }
+
+    /* 拖拽变形的蓝框 */
+    .resize-drag {
+        position: relative;
+        display: inline-block; 
+        line-height: 0;
+        touch-action: none;
+        box-sizing: border-box;
+        min-width: 50px; 
+        min-height: 50px;
+        max-width: none; 
+        max-height: none;
+        margin: auto; 
+        flex-shrink: 0;
+    }
+    
+    .resize-drag img {
+        width: 100%;
+        height: 100%;
+        display: block;
+        pointer-events: none; 
+        transition: filter 0.3s ease;
+    }
+    .resize-drag.mode-resize { outline: 2px solid #0d6efd; }
+    .resize-handle {
+        position: absolute;
+        width: 16px; 
+        height: 16px;
+        background-color: white;
+        border: 2px solid #0d6efd;
+        border-radius: 50%;
+        z-index: 10;
+        display: none; 
+        box-shadow: 0 0 5px rgba(0,0,0,0.3);
+    }
+    .resize-drag.mode-resize .resize-handle { display: block; }
+    .handle-nw { top: -8px; left: -8px; cursor: nw-resize; }
+    .handle-ne { top: -8px; right: -8px; cursor: ne-resize; }
+    .handle-sw { bottom: -8px; left: -8px; cursor: sw-resize; }
+    .handle-se { bottom: -8px; right: -8px; cursor: se-resize; }
+    .handle-n { top: -8px; left: 50%; margin-left: -8px; cursor: n-resize; }
+    .handle-s { bottom: -8px; left: 50%; margin-left: -8px; cursor: s-resize; }
+    .handle-w { left: -8px; top: 50%; margin-top: -8px; cursor: w-resize; }
+    .handle-e { right: -8px; top: 50%; margin-top: -8px; cursor: e-resize; }
+    .cropper-container { max-width: 100%; }
+</style>
+
+<div class="container-fluid px-0 px-md-4 py-3"> <div class="d-flex justify-content-between align-items-center mb-3 px-2">
+        <h3 class="mb-0"><i class="bi bi-palette"></i> 编辑器</h3>
+        <a href="{{ url_for('main.dashboard') }}" class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-arrow-left"></i> 返回
+        </a>
+    </div>
+
+    <div class="row g-0 g-lg-4"> <div class="col-lg-9 col-12 mb-3">
+            <div class="canvas-container" id="canvasArea">
+                <div class="resize-drag mode-resize" id="dragTarget">
+                    <img id="imageElement" src="{{ url_for('static', filename='uploads/' + image.filename) }}?v={{ range(1, 10000) | random }}" crossorigin="anonymous">
+                    
+                    <div class="resize-handle handle-nw" data-resize="nw"></div>
+                    <div class="resize-handle handle-ne" data-resize="ne"></div>
+                    <div class="resize-handle handle-sw" data-resize="sw"></div>
+                    <div class="resize-handle handle-se" data-resize="se"></div>
+                    <div class="resize-handle handle-n" data-resize="n"></div>
+                    <div class="resize-handle handle-s" data-resize="s"></div>
+                    <div class="resize-handle handle-w" data-resize="w"></div>
+                    <div class="resize-handle handle-e" data-resize="e"></div>
+                </div>
+            </div>
+            
+            <div class="alert alert-secondary mt-2 small border-0 d-flex justify-content-between align-items-center px-2">
+                <span id="statusText" class="text-truncate me-2"><i class="bi bi-arrows-move"></i> 变形模式：拖圆点改变长宽</span>
+                <span id="rotateStatus" class="badge bg-secondary flex-shrink-0">0°</span>
+            </div>
+        </div>
+
+        <div class="col-lg-3 col-12">
+            <div class="card shadow-sm border-0">
+                <div class="card-header bg-white fw-bold d-lg-block d-none">工具箱</div>
+                <div class="card-body card-body-tools" style="overflow-y: auto;">
+                    <form action="{{ url_for('main.edit_image', image_id=image.id) }}" method="POST" id="editForm">
+                        
+                        <div class="d-grid gap-2 mb-3">
+                            <div class="btn-group" role="group">
+                                <input type="radio" class="btn-check" name="edit_mode" id="modeResize" autocomplete="off" checked>
+                                <label class="btn btn-outline-primary" for="modeResize"><i class="bi bi-aspect-ratio"></i> 变形</label>
+
+                                <input type="radio" class="btn-check" name="edit_mode" id="modeCrop" autocomplete="off">
+                                <label class="btn btn-outline-primary" for="modeCrop"><i class="bi bi-crop"></i> 裁剪</label>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="small text-muted mb-1 fw-bold">当前尺寸 (px)</label>
+                            <div class="input-group input-group-sm">
+                                <span class="input-group-text">宽</span>
+                                <input type="number" class="form-control" id="dispWidth" readonly style="background-color: #f8f9fa;">
+                                <span class="input-group-text">高</span>
+                                <input type="number" class="form-control" id="dispHeight" readonly style="background-color: #f8f9fa;">
+                            </div>
+                        </div>
+
+                        <hr class="d-block d-lg-none my-2">
+
+                        <div class="row g-2 mb-3">
+                            <div class="col-6">
+                                <button type="button" class="btn btn-outline-secondary w-100" id="btnRotateLeft"><i class="bi bi-arrow-counterclockwise"></i> 左旋</button>
+                            </div>
+                            <div class="col-6">
+                                <button type="button" class="btn btn-outline-secondary w-100" id="btnRotateRight"><i class="bi bi-arrow-clockwise"></i> 右旋</button>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="small text-muted mb-1">滤镜效果</label>
+                            <div class="btn-group w-100" role="group">
+                                <input type="radio" class="btn-check filter-btn" name="filter_type" id="f1" value="none" checked>
+                                <label class="btn btn-outline-secondary btn-sm" for="f1">无</label>
+                                
+                                <input type="radio" class="btn-check filter-btn" name="filter_type" id="f2" value="gray">
+                                <label class="btn btn-outline-secondary btn-sm" for="f2">黑白</label>
+                                
+                                <input type="radio" class="btn-check filter-btn" name="filter_type" id="f3" value="contrast">
+                                <label class="btn btn-outline-secondary btn-sm" for="f3">对比</label>
+                                
+                                <input type="radio" class="btn-check filter-btn" name="filter_type" id="f4" value="bright">
+                                <label class="btn btn-outline-secondary btn-sm" for="f4">亮</label>
+                            </div>
+                        </div>
+
+                        <input type="hidden" name="final_width" id="final_width">
+                        <input type="hidden" name="final_height" id="final_height">
+                        <input type="hidden" name="crop_x" id="crop_x">
+                        <input type="hidden" name="crop_y" id="crop_y">
+                        <input type="hidden" name="crop_width" id="crop_width">
+                        <input type="hidden" name="crop_height" id="crop_height">
+                        <input type="hidden" name="rotate" id="rotate_val" value="0">
+                        <input type="hidden" name="active_op" id="active_op" value="resize">
+
+                        <div class="d-grid mt-4">
+                            <button type="button" class="btn btn-primary py-2 fw-bold" id="btnSave">
+                                <i class="bi bi-check-lg"></i> 保存修改
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            <div style="height: 50px;" class="d-block d-lg-none"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const container = document.getElementById('dragTarget');
+    const imgEl = document.getElementById('imageElement');
+    const statusText = document.getElementById('statusText');
+    const rotateStatus = document.getElementById('rotateStatus');
+    const dispW = document.getElementById('dispWidth');
+    const dispH = document.getElementById('dispHeight');
+
+    let totalRotation = 0; 
+    let cropperInstance = null;
+
+    // 定义更新数值的函数
+    function updateDisplay(w, h) {
+        if(dispW && dispH) {
+            dispW.value = Math.round(w);
+            dispH.value = Math.round(h);
+        }
+    }
+
+    // 图片加载完成后，初始化尺寸显示
+    imgEl.onload = function() {
+        // 如果是第一次加载，初始化容器尺寸
+        if (container.style.width === '') {
+            container.style.width = imgEl.naturalWidth + 'px';
+            container.style.height = imgEl.naturalHeight + 'px';
+        }
+        // 更新输入框数值
+        updateDisplay(parseFloat(container.style.width), parseFloat(container.style.height));
+    };
+
+    // 拖拽变形逻辑
+    const interactObj = interact('.resize-drag').resizable({
+        edges: { left: true, right: true, bottom: true, top: true },
+        enabled: true,
+        listeners: {
+            move: function (event) {
+                if (document.getElementById('active_op').value !== 'resize') return;
+                
+                Object.assign(event.target.style, {
+                    width: `${event.rect.width}px`,
+                    height: `${event.rect.height}px`,
+                });
+                
+                // 拖拽时实时更新数值
+                updateDisplay(event.rect.width, event.rect.height);
+            }
+        },
+        modifiers: [ interact.modifiers.restrictSize({ min: { width: 50, height: 50 } }) ],
+        inertia: true
+    });
+
+    // 模式切换
+    function switchMode(mode) {
+        document.getElementById('active_op').value = mode;
+        if (mode === 'resize') {
+            statusText.innerHTML = '<i class="bi bi-arrows-move"></i> 变形模式：拖圆点改变长宽';
+            if (cropperInstance) { cropperInstance.destroy(); cropperInstance = null; }
+            
+            container.classList.add('mode-resize');
+            interactObj.options.resize.enabled = true;
+            imgEl.style.pointerEvents = 'none';
+            imgEl.style.display = 'block';
+            imgEl.classList.remove('cropper-hidden');
+            
+            // 切换回变形模式时，显示当前容器尺寸
+            let w = parseFloat(container.style.width) || container.offsetWidth;
+            let h = parseFloat(container.style.height) || container.offsetHeight;
+            updateDisplay(w, h);
+
+        } else if (mode === 'crop') {
+            statusText.innerHTML = '<i class="bi bi-crop"></i> 裁剪模式：拖拽选择区域';
+            container.classList.remove('mode-resize');
+            interactObj.options.resize.enabled = false;
+            imgEl.style.pointerEvents = 'auto';
+            
+            if (!cropperInstance) {
+                cropperInstance = new Cropper(imgEl, {
+                    viewMode: 1, 
+                    autoCropArea: 0.8, 
+                    background: false,
+                    // 裁剪框变化时，也更新数值显示
+                    crop(event) {
+                        updateDisplay(event.detail.width, event.detail.height);
+                    }
+                });
+            }
+        }
+    }
+    document.getElementById('modeResize').addEventListener('change', () => switchMode('resize'));
+    document.getElementById('modeCrop').addEventListener('change', () => switchMode('crop'));
+
+    // 旋转逻辑
+    function performVisualRotation(degrees) {
+        if (cropperInstance) document.getElementById('modeResize').click();
+        
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        const w = imgEl.naturalWidth;
+        const h = imgEl.naturalHeight;
+        const isVertical = Math.abs(degrees) === 90;
+        
+        canvas.width = isVertical ? h : w;
+        canvas.height = isVertical ? w : h;
+        
+        ctx.translate(canvas.width / 2, canvas.height / 2);
+        ctx.rotate(degrees * Math.PI / 180);
+        ctx.drawImage(imgEl, -w / 2, -h / 2);
+        
+        imgEl.src = canvas.toDataURL();
+        
+        if (isVertical) {
+            const currentW = parseFloat(container.style.width) || container.offsetWidth;
+            const currentH = parseFloat(container.style.height) || container.offsetHeight;
+            container.style.width = currentH + 'px';
+            container.style.height = currentW + 'px';
+            // 旋转后更新宽高显示
+            updateDisplay(currentH, currentW);
+        } else {
+             const currentW = parseFloat(container.style.width) || container.offsetWidth;
+             const currentH = parseFloat(container.style.height) || container.offsetHeight;
+             updateDisplay(currentW, currentH);
+        }
+
+        totalRotation += degrees;
+        document.getElementById('rotate_val').value = totalRotation;
+        rotateStatus.innerText = `${totalRotation}°`;
+    }
+    document.getElementById('btnRotateLeft').addEventListener('click', () => performVisualRotation(-90));
+    document.getElementById('btnRotateRight').addEventListener('click', () => performVisualRotation(90));
+
+    // 滤镜逻辑
+    document.querySelectorAll('.filter-btn').forEach(radio => {
+        radio.addEventListener('change', function() {
+            const val = this.value;
+            let s = 'none';
+            if (val === 'gray') s = 'grayscale(100%)';
+            else if (val === 'contrast') s = 'contrast(150%)';
+            else if (val === 'bright') s = 'brightness(120%)';
+            imgEl.style.filter = s;
+            const cCanvas = document.querySelector('.cropper-canvas img');
+            if (cCanvas) cCanvas.style.filter = s;
+        });
+    });
+
+    // 保存逻辑
+    document.getElementById('btnSave').addEventListener('click', function() {
+        const mode = document.getElementById('active_op').value;
+        if (mode === 'resize') {
+            let w = parseFloat(container.style.width);
+            let h = parseFloat(container.style.height);
+            if (!w) w = container.offsetWidth;
+            if (!h) h = container.offsetHeight;
+            document.getElementById('final_width').value = Math.round(w);
+            document.getElementById('final_height').value = Math.round(h);
+            document.getElementById('crop_width').value = '';
+        } else if (mode === 'crop') {
+            if (cropperInstance) {
+                const data = cropperInstance.getData();
+                document.getElementById('crop_x').value = Math.round(data.x);
+                document.getElementById('crop_y').value = Math.round(data.y);
+                document.getElementById('crop_width').value = Math.round(data.width);
+                document.getElementById('crop_height').value = Math.round(data.height);
+                document.getElementById('final_width').value = '';
+            }
+        }
+        if(confirm(`确定保存吗？`)) document.getElementById('editForm').submit();
+    });
+</script>
+{% endblock %}

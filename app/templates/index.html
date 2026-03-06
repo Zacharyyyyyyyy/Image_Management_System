@@ -1,0 +1,19 @@
+<!-- 首页 -->
+{% extends "base.html" %}
+
+{% block content %}
+    <div class="p-5 mb-4 bg-light rounded-3">
+        <div class="container-fluid py-5">
+            <h1 class="display-5 fw-bold">欢迎使用图片管理系统</h1>
+            <p class="col-md-8 fs-4">
+                这是 B/S 体系软件设计的大作业项目。
+            </p>
+            {% if not current_user.is_authenticated %}
+                <a href="{{ url_for('main.register') }}" class="btn btn-primary btn-lg" type="button">立即注册</a>
+                <a href="{{ url_for('main.login') }}" class="btn btn-secondary btn-lg" type="button">登录</a>
+            {% else %}
+                <a href="{{ url_for('main.dashboard') }}" class="btn btn-success btn-lg" type="button">前往我的仪表盘</a>
+            {% endif %}
+        </div>
+    </div>
+{% endblock %}

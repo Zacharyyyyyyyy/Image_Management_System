@@ -1,0 +1,21 @@
+version: '3.8'
+
+services:
+  imagemanager:
+    build: .
+    container_name: flask_image_manager
+    ports:
+      - "5000:5000"
+    volumes:
+      # 持久化存储上传的图片
+      - ./app/static/uploads:/app/app/static/uploads
+      - ./app/static/thumbnails:/app/app/static/thumbnails
+      # 如果使用 SQLite，持久化数据库文件
+      - ./app.db:/app/app.db
+      # 挂载 AI 模型文件夹（避免在构建镜像时复制巨大的模型）
+      - ./vit-model:/app/vit-model
+    environment:
+      - SECRET_KEY=yoursecretkeyhere
+      - UPLOAD_FOLDER=app/static/uploads
+      - THUMBNAIL_FOLDER=app/static/thumbnails
+    restart: always

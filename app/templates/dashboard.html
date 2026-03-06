@@ -1,0 +1,301 @@
+{% extends "base.html" %}
+
+{% block content %}
+<style>
+    /* 图片选择复选框样式 */
+    .img-checkbox-wrapper {
+        position: absolute;
+        top: 10px;
+        left: 10px;
+        z-index: 10;
+        background: rgba(255, 255, 255, 0.8);
+        border-radius: 50%;
+        width: 24px;
+        height: 24px;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        cursor: pointer;
+        border: 1px solid #ccc;
+    }
+    .form-check-input.img-select {
+        margin: 0;
+        cursor: pointer;
+    }
+
+    /* 选中时的卡片高亮 */
+    .card.selected-card {
+        border-color: #0d6efd;
+        box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+    }
+
+    /* 轮播模态框样式 */
+    .carousel-modal .modal-content {
+        background-color: black; /* 黑色背景，类似看图软件 */
+        border: none;
+    }
+    .carousel-item {
+        height: 80vh; /* 轮播高度占屏幕80% */
+        text-align: center;
+        background-color: black;
+    }
+    .carousel-item img {
+        max-height: 100%;
+        max-width: 100%;
+        object-fit: contain; /* 保证图片完整显示，不裁剪 */
+        margin: auto;
+        position: absolute;
+        top: 0; bottom: 0; left: 0; right: 0;
+    }
+    .carousel-caption {
+        background: rgba(0, 0, 0, 0.5);
+        border-radius: 20px;
+        padding: 5px 20px;
+        bottom: 20px;
+    }
+    .card-img-top {
+        width: 100%;          
+        height: 200px;        /* 强制固定高度 */
+        object-fit: cover;    /* 自动裁剪 */
+        object-position: top center; /* 重点显示图片上部 */
+        border-bottom: 1px solid #f0f0f0;
+    }
+</style>
+
+    <h2><i class="bi bi-speedometer2"></i> 仪表盘</h2>
+    <p>欢迎, <strong>{{ current_user.username }}</strong>! 你可以在这里管理你的图片。</p>
+    <hr>
+    
+    <div class="card mb-4">
+        <div class="card-header">上传新图片</div>
+        <div class="card-body">
+            <form action="{{ url_for('main.upload_image') }}" method="POST" enctype="multipart/form-data">
+                <div class="mb-3">
+                    <label for="file" class="form-label">选择图片</label>
+                    <input class="form-control" type="file" id="file" name="file" accept="image/png, image/jpeg, image/gif">
+                </div>
+                <button type="submit" class="btn btn-primary"><i class="bi bi-upload"></i> 上传</button>
+            </form>
+        </div>
+    </div>
+
+    <div>
+        <div class="d-flex justify-content-between align-items-center mb-2">
+            <h4><i class="bi bi-images"></i> 我的图库</h4>
+        </div>
+
+        <form action="{{ url_for('main.dashboard') }}" method="GET" class="mb-3">
+            <div class="input-group">
+                <span class="input-group-text bg-white"><i class="bi bi-search"></i></span>
+                <input type="text" name="q" class="form-control" placeholder="输入图片名称或标签进行检索..." value="{{ search_query }}">
+                <button class="btn btn-primary" type="submit">搜索</button>
+                {% if search_query %}
+                    <a href="{{ url_for('main.dashboard') }}" class="btn btn-outline-secondary">清除</a>
+                {% endif %}
+            </div>
+        </form>
+        
+        <div class="card bg-light mb-4 border-0">
+            <div class="card-body py-2 d-flex justify-content-between align-items-center">
+                <div>
+                    <div class="form-check form-check-inline">
+                        <input class="form-check-input" type="checkbox" id="selectAll">
+                        <label class="form-check-label user-select-none" for="selectAll">全选 / 取消全选</label>
+                    </div>
+                    <span class="text-muted small ms-2" id="selectCount">已选: 0 张</span>
+                </div>
+                <button type="button" class="btn btn-success" id="btnPlaySlideshow" disabled>
+                    <i class="bi bi-play-circle-fill"></i> 播放选中图片
+                </button>
+            </div>
+        </div>
+
+        {% if search_query and not images %}
+            <div class="alert alert-warning text-center">
+                未找到与 "<strong>{{ search_query }}</strong>" 相关的图片。
+            </div>
+        {% endif %}
+
+        <div class="row mt-3 g-2"> {% if images %}
+                {% for image in images %}
+                <div class="col-6 col-md-4 col-lg-3">
+                    <div class="card h-100 position-relative" id="card-{{ image.id }}">
+                        
+                        <div class="img-checkbox-wrapper">
+                            <input class="form-check-input img-select" type="checkbox" 
+                                   value="{{ image.id }}" 
+                                   data-src="{{ url_for('static', filename='uploads/' + image.filename) }}?v={{ range(1, 10000) | random }}"
+                                   data-title="{{ image.name }}">
+                        </div>
+
+                        <img src="{{ url_for('static', filename='thumbnails/' + image.thumbnail) }}?v={{ range(1, 10000) | random }}" class="card-img-top" alt="{{ image.name }}">
+
+                        <div class="card-body small">
+                            <div class="d-flex align-items-center justify-content-between mb-2">
+                                <h5 class="card-title text-truncate mb-0 me-1" title="{{ image.name }}" style="max-width: 85%;">
+                                    {{ image.name or '未命名' }}
+                                </h5>
+                                <a href="#" data-bs-toggle="modal" data-bs-target="#renameModal{{ image.id }}" class="text-decoration-none text-muted flex-shrink-0">
+                                    <i class="bi bi-pencil-square"></i>
+                                </a>
+                            </div>
+
+                            <p class="card-text mb-1 text-muted">
+                                <i class="bi bi-aspect-ratio"></i> {{ image.resolution or '未知' }} <br>
+                                <i class="bi bi-calendar-event"></i> 
+                                {% if image.exif_datetime %}
+                                    {{ image.exif_datetime.strftime('%Y-%m-%d') }}
+                                {% else %}
+                                    {{ image.uploaded_at.strftime('%Y-%m-%d') }} (上传)
+                                {% endif %}
+                            </p>
+                            
+                            <div class="mb-2">
+                                {% for tag in image.tags %}
+                                    <span class="badge bg-secondary me-1">{{ tag.name }}</span>
+                                {% endfor %}
+                            </div>
+
+                            <form action="{{ url_for('main.add_tag', image_id=image.id) }}" method="POST" class="input-group input-group-sm">
+                                <input type="text" name="tag_name" class="form-control" placeholder="加标签..." required>
+                                <button class="btn btn-outline-primary" type="submit">+</button>
+                            </form>
+                        </div>
+
+                        <div class="card-footer bg-white d-flex gap-2">
+                            <a href="{{ url_for('main.edit_image', image_id=image.id) }}" class="btn btn-sm btn-outline-primary w-50">
+                                <i class="bi bi-pencil"></i> 编辑
+                            </a>
+                            <form action="{{ url_for('main.delete_image', image_id=image.id) }}" method="POST" onsubmit="return confirm('确定要永久删除这张图片吗？');" class="w-50">
+                                <button type="submit" class="btn btn-sm btn-outline-danger w-100">
+                                    <i class="bi bi-trash"></i> 删除
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+
+                    <div class="modal fade" id="renameModal{{ image.id }}" tabindex="-1" aria-hidden="true">
+                        <div class="modal-dialog modal-sm modal-dialog-centered">
+                            <div class="modal-content">
+                                <div class="modal-header">
+                                    <h5 class="modal-title">重命名</h5>
+                                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                </div>
+                                <form action="{{ url_for('main.rename_image', image_id=image.id) }}" method="POST">
+                                    <div class="modal-body">
+                                        <input type="text" name="new_name" class="form-control" value="{{ image.name or '' }}" required>
+                                    </div>
+                                    <div class="modal-footer">
+                                        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">取消</button>
+                                        <button type="submit" class="btn btn-primary btn-sm">保存</button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            {% else %}
+                {% if not search_query %}
+                <div class="col-12"><p class="text-muted text-center py-5">您的图库是空的，快去上传第一张图片吧！</p></div>
+                {% endif %}
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="modal fade carousel-modal" id="slideshowModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-fullscreen">
+            <div class="modal-content">
+                <div class="modal-header border-0 bg-black text-white">
+                    <h5 class="modal-title"><i class="bi bi-play-circle"></i> 图片浏览</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body p-0 d-flex align-items-center justify-content-center">
+                    
+                    <div id="imageCarousel" class="carousel slide w-100 h-100" data-bs-ride="false"> <div class="carousel-inner" id="carouselInner">
+                            </div>
+                        
+                        <button class="carousel-control-prev" type="button" data-bs-target="#imageCarousel" data-bs-slide="prev">
+                            <span class="carousel-control-prev-icon" aria-hidden="true"></span>
+                            <span class="visually-hidden">Previous</span>
+                        </button>
+                        <button class="carousel-control-next" type="button" data-bs-target="#imageCarousel" data-bs-slide="next">
+                            <span class="carousel-control-next-icon" aria-hidden="true"></span>
+                            <span class="visually-hidden">Next</span>
+                        </button>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 全选/反选逻辑
+        const selectAllCheckbox = document.getElementById('selectAll');
+        const imgCheckboxes = document.querySelectorAll('.img-select');
+        const btnPlay = document.getElementById('btnPlaySlideshow');
+        const selectCountLabel = document.getElementById('selectCount');
+
+        function updateUI() {
+            let checkedCount = 0;
+            imgCheckboxes.forEach(cb => {
+                const card = document.getElementById('card-' + cb.value);
+                if (cb.checked) {
+                    checkedCount++;
+                    card.classList.add('selected-card'); // 给选中的卡片加蓝框
+                } else {
+                    card.classList.remove('selected-card');
+                }
+            });
+
+            selectCountLabel.innerText = `已选: ${checkedCount} 张`;
+            btnPlay.disabled = checkedCount === 0; // 如果没选，禁用播放按钮
+        }
+
+        selectAllCheckbox.addEventListener('change', function() {
+            imgCheckboxes.forEach(cb => {
+                cb.checked = this.checked;
+            });
+            updateUI();
+        });
+
+        imgCheckboxes.forEach(cb => {
+            cb.addEventListener('change', function() {
+                updateUI();
+                // 如果有一个没选，全选框取消选中
+                if (!this.checked) selectAllCheckbox.checked = false;
+            });
+        });
+
+        // 播放轮播逻辑
+        btnPlay.addEventListener('click', function() {
+            const container = document.getElementById('carouselInner');
+            container.innerHTML = ''; // 清空上次的内容
+            
+            // 获取所有选中的 checkbox
+            const checkedBoxes = Array.from(imgCheckboxes).filter(cb => cb.checked);
+            
+            checkedBoxes.forEach((cb, index) => {
+                // 构建 carousel-item 结构
+                const div = document.createElement('div');
+                div.className = `carousel-item ${index === 0 ? 'active' : ''}`; // 第一张必须加 active
+                
+                const imgSrc = cb.getAttribute('data-src');
+                const title = cb.getAttribute('data-title');
+                
+                div.innerHTML = `
+                    <img src="${imgSrc}" alt="${title}">
+                    <div class="carousel-caption d-none d-md-block">
+                        <h5>${title}</h5>
+                    </div>
+                `;
+                container.appendChild(div);
+            });
+
+            // 显示模态框
+            const myModal = new bootstrap.Modal(document.getElementById('slideshowModal'));
+            myModal.show();
+        });
+    </script>
+{% endblock %}
